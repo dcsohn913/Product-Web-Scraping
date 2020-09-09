@@ -1,0 +1,97 @@
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+from time import sleep
+from random import randint
+
+brands = []
+names = []
+prices = []
+old_prices = []
+shipping_cost = []
+sale_notes = []
+promos = []
+
+# Search through first 4 pages 
+for page in range(1, 5):
+    if page == 1:
+        page = requests.get('https://www.newegg.com/Gaming-Laptops/SubCategory/ID-3365?Tid=167732')
+    else:
+        page = requests.get('https://www.newegg.com/Gaming-Laptops/SubCategory/ID-3365/Page-' + str(page) + '?Tid=167732')
+
+    soup = BeautifulSoup(page.content, 'html.parser')
+    containers = soup.find_all(class_='item-container')
+    sleep(randint(2, 10))
+
+    for container in containers:
+        # Brand Name
+        brand = container.div.div.a.img['title']
+        brands.append(brand)
+
+        # Product Name
+        name = container.find('a', {'class': 'item-title'}).get_text()
+        names.append(name)
+
+        # Current Prices
+        if container.find('li', {'class': 'price-current'}).get_text() != '':
+            price = container.find('li', {'class': 'price-current'}).get_text()
+            price = price.split()
+            price = '{0:.2f}'.format(float(price[0].replace('$', '').replace(',', '')))
+            price = float(price)
+        else:
+            price = 'See price in cart'
+        prices.append(price)
+
+        # Old Prices
+        try:
+            old_price = container.find('span', {'class': 'price-was-data'}).get_text()
+        except:
+            old_price = 'NaN'
+        old_price = '{0:.2f}'.format(float(old_price.replace('$', '').replace(',', '')))
+        old_prices.append(old_price)
+
+        # Shipping
+        shipping = container.find('li', {'class': 'price-ship'}).get_text()
+        if shipping == 'Free Shipping':
+            shipping = 0
+        elif shipping == 'Special Shipping':
+            shipping = 'Special Shipping'
+        else:
+            shipping = shipping.split()
+            shipping = '{0:.2f}'.format(float(shipping[0].replace('$', '')))
+            shipping = float(shipping)
+        shipping_cost.append(shipping)
+
+        # Sale Notes
+        try:
+            sale_note = container.find('span', {'class': 'price-save-endtime'}).get_text()
+            sale_note = sale_note[:-3]
+        except:
+            sale_note = ''
+        sale_notes.append(sale_note)
+
+        # Promotions
+        try:
+            promo = container.find('p', class_='item-promo').text
+        except:
+            promo = ''
+        promos.append(promo)
+
+# Create DataFrame
+df = pd.DataFrame(
+    {
+        'Name': names,
+        'Brand': brands,
+        'Price': prices,
+        'Old Price': old_prices,
+        'Sale Note': sale_notes,
+        'Shipping Cost': shipping_cost,
+        'Promotions': promos,
+    }
+)
+
+# Convert non numeric values to NaN
+df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
+df['Old Price'] = pd.to_numeric(df['Old Price'], errors='coerce')
+
+df.to_csv('Product Search.csv')
